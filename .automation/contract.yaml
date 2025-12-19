@@ -1,0 +1,372 @@
+# Mi2 Playwright Automation Framework Contract
+#
+# PLACEMENT OPTIONS:
+#   Option 1 (Recommended): .automation/contract.yaml
+#   Option 2 (Root level):  automation.contract.yaml
+#
+# The extension looks for these files in order and uses the first one found.
+
+version: "1.0"
+
+# Framework identification
+framework:
+  name: "Mi2 Playwright Framework"
+  type: "playwright-cucumber"
+  language: "typescript"
+
+# Directory structure configuration
+structure:
+  features:
+    path: "src/tests/features"
+    pattern: "{domain}/*.feature"
+    naming: "kebab-case"
+    organization: "by-domain"
+
+  steps:
+    path: "src/tests/steps"
+    pattern: "{domain}/*.steps.ts"
+    naming: "kebab-case"
+    baseClass: null
+    organization: "by-domain"
+
+  pages:
+    path: "src/pages"
+    pattern: "{domain}/*Page.ts"
+    naming: "camelCase"
+    suffix: "Page"
+    baseClass: "BasePage"
+    baseClassPath: "src/pages/basePage.ts"
+    organization: "by-domain"
+
+  testData:
+    path: "test-data-store"
+    pattern: "{domain}/*.json"
+    organization: "by-domain"
+
+  wrappers:
+    path: "src/helpers/wrapper"
+    mainClass: "PlaywrightWrapper"
+    mainFile: "playwrightWrappers.ts"
+
+  hooks:
+    path: "src/hooks"
+    fixtureFile: "fixture.ts"
+    hooksFile: "hooks.ts"
+
+  envConfig:
+    path: "src/helpers/env"
+    pattern: ".env.{environment}"
+
+# Fixture object configuration
+fixture:
+  import: "import { fixture } from '../../hooks/fixture'"
+  page: "fixture.page"
+  dataBag: "fixture.dataBag"
+  globalDataBag: "fixture.globalDataBag"
+  pageFactory: "fixture.pageFactory"
+  logger: "fixture.logger"
+
+# Test data loading configuration
+dataLoading:
+  helper: "StepDataHelper"
+  helperPath: "src/tests/steps/stepDataHelper.ts"
+  pathFormat: "json://ENV_VARIABLE#recordKey"
+  methods:
+    single: "getSingleTestDataRecordForType"
+    multiple: "getMultipleTestDataRecordsForType"
+    string: "getSingleStringNodeData"
+    stringList: "getStringNodeListData"
+
+# Framework compliance rules
+rules:
+  required:
+    - id: "extend-basepage"
+      description: "All page objects must extend BasePage"
+      scope: "pages"
+      pattern: "class\\s+\\w+\\s+extends\\s+BasePage"
+
+    - id: "implement-ispagestable"
+      description: "Pages must implement isPageStable() method"
+      scope: "pages"
+      pattern: "async\\s+isPageStable\\s*\\("
+
+    - id: "implement-cannavigatewithurl"
+      description: "Pages must implement canNavigateWithUrl() method"
+      scope: "pages"
+      pattern: "async\\s+canNavigateWithUrl\\s*\\("
+
+    - id: "use-elements-dict"
+      description: "Define locators in Elements dictionary, not inline"
+      scope: "pages"
+      pattern: "Elements\\s*=\\s*\\{"
+
+    - id: "no-raw-playwright"
+      description: "Use pwWrapper methods, not raw page.* methods"
+      scope: "all"
+      antiPatterns:
+        - "page\\.click\\("
+        - "page\\.fill\\("
+        - "page\\.type\\("
+        - "page\\.locator\\(.*\\)\\.(click|fill|type)\\("
+        - "page\\.waitForSelector\\("
+        - "page\\.waitForTimeout\\("
+        - "page\\.getByRole\\(.*\\)\\.(click|fill)\\("
+        - "page\\.getByText\\(.*\\)\\.(click|fill)\\("
+        - "page\\.getByPlaceholder\\(.*\\)\\.(click|fill)\\("
+        - "page\\.getByTestId\\(.*\\)\\.(click|fill)\\("
+
+    - id: "use-fixture-databag"
+      description: "Use fixture.dataBag for state sharing, not class variables"
+      scope: "steps"
+      pattern: "fixture\\.dataBag\\.(saveData|getData)"
+
+    - id: "use-pagefactory"
+      description: "Get pages via fixture.pageFactory, not 'new' keyword"
+      scope: "steps"
+      pattern: "fixture\\.pageFactory"
+
+    - id: "use-stepdatahelper"
+      description: "Load test data via StepDataHelper, not hardcoded values"
+      scope: "steps"
+      pattern: "StepDataHelper\\.(getSingleTestDataRecordForType|getMultipleTestDataRecordsForType)"
+
+    - id: "scenario-independence"
+      description: "Each scenario must be independent and set up its own state"
+      scope: "features"
+      note: "No scenario should depend on another scenario's execution"
+
+    - id: "use-background"
+      description: "Use Background block for common setup across scenarios"
+      scope: "features"
+      pattern: "Background:"
+
+  recommended:
+    - id: "use-tags"
+      description: "Tag scenarios for selective execution"
+      scope: "features"
+      pattern: "@\\w+"
+
+    - id: "meaningful-scenario-names"
+      description: "Use descriptive scenario names that explain the behavior"
+      scope: "features"
+
+# Wrapper method mappings (raw Playwright -> Framework wrapper)
+wrapperMappings:
+  click:
+    raw: "page.click(selector)"
+    framework: "pwWrapper.elementAction.waitAndClick(locator)"
+
+  clickButton:
+    raw: "page.getByRole('button', {name}).click()"
+    framework: "pwWrapper.elementAction.waitAndClickButtonByRole(name)"
+
+  clickButtonByText:
+    raw: "page.locator('button', {hasText}).click()"
+    framework: "pwWrapper.elementAction.waitAndClickButtonByText(text, exact)"
+
+  fill:
+    raw: "page.fill(selector, value)"
+    framework: "pwWrapper.dataWriter.enterValueIntoTextboxByPlaceholder(placeholder, value)"
+
+  fillByTestId:
+    raw: "page.getByTestId(id).fill(value)"
+    framework: "pwWrapper.dataWriter.enterValueIntoTextboxByTestId(testId, value)"
+
+  getText:
+    raw: "page.locator(selector).textContent()"
+    framework: "pwWrapper.dataReader.getElementText(text)"
+
+  getTextByTestId:
+    raw: "page.getByTestId(id).textContent()"
+    framework: "pwWrapper.dataReader.getElementTextByTestId(testId)"
+
+  navigate:
+    raw: "page.goto(url)"
+    framework: "pwWrapper.goto(url)"
+
+  waitForStability:
+    raw: "page.waitForSelector(selector)"
+    framework: "page.isPageStable()"
+
+  selectDropdown:
+    raw: "page.selectOption(selector, value)"
+    framework: "pwWrapper.dataWriter.selectDropdownByText(locator, value)"
+
+  checkbox:
+    raw: "page.check(selector)"
+    framework: "pwWrapper.elementAction.checkCheckbox(locator)"
+
+  isVisible:
+    raw: "page.locator(selector).isVisible()"
+    framework: "pwWrapper.dataReader.isElementVisible(locator)"
+
+# Code examples for Copilot context
+examples:
+  pageObject: |
+    import { Page } from '@playwright/test';
+    import { BasePage } from '../basePage';
+    import { PlaywrightWrapper } from '../../helpers/wrapper/playwrightWrappers';
+
+    export class LoginPage extends BasePage {
+      Elements = {
+        emailInput: 'Email',
+        passwordInput: 'Password',
+        loginButton: 'Sign In',
+        errorMessage: '[data-testid="login-error"]',
+      };
+
+      private pwWrapper: PlaywrightWrapper;
+
+      constructor(page: Page) {
+        super(page);
+        this.pwWrapper = new PlaywrightWrapper(page);
+      }
+
+      async isPageStable(): Promise<boolean> {
+        return await this.waitUntilButtonIsDisplayed(this.Elements.loginButton);
+      }
+
+      async canNavigateWithUrl(): Promise<boolean> {
+        return true;
+      }
+
+      async enterEmail(email: string): Promise<void> {
+        await this.pwWrapper.dataWriter.enterValueIntoTextboxByPlaceholder(
+          this.Elements.emailInput,
+          email
+        );
+      }
+
+      async enterPassword(password: string): Promise<void> {
+        await this.pwWrapper.dataWriter.enterValueIntoTextboxByPlaceholder(
+          this.Elements.passwordInput,
+          password
+        );
+      }
+
+      async clickLogin(): Promise<void> {
+        await this.pwWrapper.elementAction.waitAndClickButtonByText(
+          this.Elements.loginButton,
+          true
+        );
+      }
+
+      async getErrorMessage(): Promise<string> {
+        return await this.pwWrapper.dataReader.getElementTextByTestId('login-error');
+      }
+    }
+
+  stepDefinition: |
+    import { Given, When, Then } from '@cucumber/cucumber';
+    import { fixture } from '../../hooks/fixture';
+    import { LoginPage } from '../../pages/login/loginPage';
+    import { StepDataHelper } from './stepDataHelper';
+    import { TestDataType } from '../../helpers/types/testDataType';
+    import { expect } from '@playwright/test';
+
+    let loginPage: LoginPage;
+
+    Given('user navigates to the login page', async function() {
+      loginPage = fixture.pageFactory.getPage(LoginPage);
+      await loginPage.navigate('/login');
+    });
+
+    Given('login page is fully loaded', async function() {
+      await loginPage.isPageStable();
+    });
+
+    When('user enters valid credentials', async function() {
+      const userData = StepDataHelper.getSingleTestDataRecordForType<UserData>(
+        TestDataType.UserData,
+        'json://LOGIN_USER_DATA#validUser'
+      );
+      await loginPage.enterEmail(userData.email);
+      await loginPage.enterPassword(userData.password);
+    });
+
+    When('user clicks the login button', async function() {
+      await loginPage.clickLogin();
+    });
+
+    Then('user is redirected to the dashboard', async function() {
+      const currentUrl = await loginPage.getCurrentPageURL();
+      expect(currentUrl).toContain('/dashboard');
+    });
+
+    Then('error message {string} is displayed', async function(expectedMessage: string) {
+      const errorMessage = await loginPage.getErrorMessage();
+      expect(errorMessage).toContain(expectedMessage);
+    });
+
+  featureFile: |
+    @login
+    Feature: User Login
+      As a registered user
+      I want to login to my account
+      So that I can access protected features
+
+      Background:
+        Given user navigates to the login page
+        And login page is fully loaded
+
+      @smoke @positive
+      Scenario: Successful login with valid credentials
+        When user enters valid credentials
+        And user clicks the login button
+        Then user is redirected to the dashboard
+
+      @negative
+      Scenario: Login fails with invalid password
+        When user enters invalid credentials
+        And user clicks the login button
+        Then error message "Invalid email or password" is displayed
+        And user remains on the login page
+
+  testData: |
+    {
+      "validUser": {
+        "email": "testuser@example.com",
+        "password": "ValidPass123!"
+      },
+      "invalidUser": {
+        "email": "testuser@example.com",
+        "password": "wrongpassword"
+      }
+    }
+
+  envFile: |
+    BASEURL=https://qa1.example.com
+    BROWSER=chromium
+    LOGIN_USER_DATA=test-data-store/login/userData.json
+
+# Conversation flow for the agent
+conversationFlow:
+  steps:
+    - name: "Gather Feature Description"
+      prompt: "What feature would you like to automate? Describe the user goal and behaviors."
+      required: true
+
+    - name: "Clarify Details"
+      prompt: "Ask follow-up questions about edge cases, error handling, user flows"
+      required: false
+      condition: "if description is ambiguous"
+
+    - name: "Confirm Understanding"
+      prompt: "Summarize understanding and ask for confirmation"
+      required: true
+
+    - name: "Propose Scenarios"
+      prompt: "Suggest happy path, alternate happy path, and negative scenarios"
+      required: true
+
+    - name: "User Selects Scenarios"
+      prompt: "Let user choose which scenarios to include"
+      required: true
+
+    - name: "Preview Files"
+      prompt: "Show files to be created with code preview"
+      required: true
+
+    - name: "Generate on Approval"
+      prompt: "Create files only after explicit user approval"
+      required: true
