@@ -1,0 +1,170 @@
+name: Sample Playwright Automation Tests
+ 
+variables:
+  CI: true
+
+resources:
+  pipelines:
+  - pipeline: Actual_Application_Pipeline
+    source: Actual\Application\Pipeline\Web App Name
+    trigger: true
+ 
+trigger:
+  - none
+ 
+jobs:
+  - job: Test_Sample_App_UI
+    timeoutInMinutes: 360
+    pool:
+      vmImage: "windows-latest"
+      # vmImage: "windows-2019"
+      # vmImage: "ubuntu-latest"
+      
+    steps:
+      - task: PowerShell@2
+        inputs:
+          targetType: 'inline'
+          script: |
+            $servers = @(
+              @{ Name = "application.database.windows.net"; Port = 1433 },
+              @{ Name = "application.com"; Port = $null }
+            )
+          
+            $allServersReachable = $true
+
+            foreach ($server in $servers) {
+              if ($server.Port) {
+                #  $connection = Test-NetConnection -ComputerName $server.Name -Port $server.Port -InformationLevel Detailed
+                $connection = Test-NetConnection -ComputerName $server.Name -Port $server.Port
+              } else {
+                # $connection = Test-NetConnection -ComputerName $server.Name -InformationLevel Detailed
+                $connection = Test-NetConnection -ComputerName $server.Name
+              }
+
+              if ($connection.TcpTestSucceeded -or $connection.PingSucceeded) {
+                Write-Host "$($server.Name) is reachable"
+              } else {
+                Write-Host "$($server.Name) is not reachable"
+                Write-Host "Detailed information: $($connection | ConvertTo-Json -Depth 4)"
+                $allServersReachable = $false
+              }
+            }
+
+            # if (-not $allServersReachable) {
+            #  exit 1
+            # }
+        displayName: "Checking servers availability/reachability"
+      - task: NodeTool@0
+        inputs:
+          versionSpec: "22.13.1"
+        displayName: "Install Node.js"
+
+      # - script: |
+      #     npm install -g npm@latest
+      #   displayName: "Update npm"
+      # - task: NodeTool@0
+      #   inputs:
+      #     versionSpec: "lts"  # Install the latest LTS version of Node.js
+      #   displayName: "Install Node.js"
+
+      # Update npm to a specific version
+      - script: |
+          npm install -g npm@10.8.1
+        displayName: 'Update npm to version 10.8.1'
+
+      - script: |
+          echo "Cleaning npm cache..."
+          npm cache clean --force
+        displayName: "Clean npm cache"
+        workingDirectory: $(System.DefaultWorkingDirectory)
+
+      - script: |
+          rm -rf node_modules package-lock.json
+          npm install
+      #    echo "Listing installed npm packages..."
+      #    npm list
+        displayName: "Install dependencies"
+        workingDirectory: $(System.DefaultWorkingDirectory)
+ 
+      # THIS IS TO INSTALL xvfb WITHOUT RESOLUTION --> this is for Linux OS only
+      # - script: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y xvfb
+      #     export DISPLAY=:99
+      #     Xvfb :99 &
+      #   displayName: 'Install and start xvfb'
+
+      # # THIS IS TO INSTALL xvfb WITH RESOLUTION --> this is for Linux OS only
+      # - script: |
+      #     sudo apt-get update
+      #     sudo apt-get install -y xvfb
+      #     export DISPLAY=:99
+      #     Xvfb :99 -screen 0 1920x1080x24 &
+      #   displayName: 'Install and start xvfb'
+
+      - script: |
+          npx playwright install --with-deps
+        displayName: "Install Playwright Browsers"
+
+      - task: AzureKeyVault@2
+        inputs:
+          azureSubscription: azure-subscription-name
+          KeyVaultName: key-vault-name 
+          SecretsFilter: sample-PLWR-user, sample-PLWR-pass
+          RunAsPreJob: true
+      
+      # running tests on Windows OS  
+      #- script: |
+      #    export playwrightUser=$(playwrightUser)
+      #    export playwrightPasswd=$(playwrightPasswd)
+      #    export JDEReleaseFunctionsKey=$(JDEReleaseFunctionsKey)
+      #    npm test
+      #    sleep 10
+      #  displayName: "Run Playwright tests"
+      #  env:
+      #    playwrightUser: $(playwrightUser)
+      #    playwrightPasswd: $(playwrightPasswd)
+      #    JDEReleaseFunctionsKey: $(JDEReleaseFunctionsKey)
+      - script: |
+          export playwrightUser=$(sample-PLWR-user)
+          export playwrightPasswd=$(sample-PLWR-pass)
+          npm test
+          sleep 10
+        displayName: "Run Playwright tests"
+        env:
+          playwrightUser: $(sample-PLWR-user)
+          playwrightPasswd: $(sample-PLWR-pass)
+      # running tests on Linux OS
+      # - script: |
+      #     export playwrightUser=$(playwrightUser)
+      #     export playwrightPasswd=$(playwrightPasswd)
+      #     export JDEReleaseFunctionsKey=$(JDEReleaseFunctionsKey)
+      #     xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' npm test
+      #     sleep 10
+      #   displayName: "Run Playwright tests"
+      #   env:
+      #     playwrightUser: $(playwrightUser)
+      #     playwrightPasswd: $(playwrightPasswd)
+      #     JDEReleaseFunctionsKey: $(JDEReleaseFunctionsKey)
+          
+      # - task: PublishBuildArtifacts@1
+      #   displayName: 'Publish Artifact: drop'
+      #   inputs:
+      #     PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+
+      - publish: $(System.DefaultWorkingDirectory)/test-results
+        artifact: test-report
+        # always create the artifact, this is useful for debugging failed tests
+        condition: always()
+      
+      - task: PublishHtmlReport@1
+        inputs:
+          tabName: 'Custom Report'
+          reportDir: '$(System.DefaultWorkingDirectory)/test-results/report.html'
+
+      - bash: |
+          if [ -f "$(System.DefaultWorkingDirectory)/buildSignal.txt" ]; then
+            echo "buildSignal file exists"
+            exit 1
+          fi
+        displayName: 'Check if buildSignal file exists and fail if it does'
